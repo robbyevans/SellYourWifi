@@ -1,42 +1,43 @@
 const express = require("express");
-const wifi = require("node-wifi");
 const cors = require("cors");
-const xss = require("xss");
+const wifi = require("node-wifi"); // Ensure node-wifi is installed
 
 const app = express();
-const PORT = 3001;
-
 app.use(cors());
-app.use(express.json());
+app.use(express.json()); // For parsing application/json
 
-// Sanitize inputs to prevent injection attacks
-const sanitizeInput = (input) => xss(input);
-
-app.post("/connect", (req, res) => {
-  const ssid = sanitizeInput(req.body.ssid);
-  const password = sanitizeInput(req.body.password);
-  const duration = Number(req.body.duration);
-
-  wifi.connect({ ssid, password }, (err) => {
-    if (err) {
-      console.log(err);
-      return res.status(500).send("Error connecting to Wi-Fi");
-    }
-    console.log(`Connected to ${ssid}`);
-
-    setTimeout(() => {
-      wifi.disconnect((err) => {
-        if (err) {
-          console.log(err);
-          return res.status(500).send("Error disconnecting from Wi-Fi");
-        }
-        console.log("Disconnected from Wi-Fi");
-        res.send("Disconnected from Wi-Fi");
-      });
-    }, duration * 60 * 1000);
-  });
+// Initialize wifi module
+wifi.init({
+  iface: null, // network interface, null to use all available interfaces
 });
 
+app.post("/connect", async (req, res) => {
+  const { ssid, password, duration } = req.body;
+
+  if (!ssid || !password || !duration) {
+    return res.status(400).send("Missing parameters");
+  }
+
+  try {
+    // Connect to the Wi-Fi network
+    await wifi.connect({ ssid, password });
+    console.log(`Connected to ${ssid}`);
+
+    // Set a timeout to disconnect after the given duration
+    setTimeout(async () => {
+      await wifi.disconnect();
+      console.log(`Disconnected from ${ssid} after ${duration} minutes`);
+    }, duration * 60000); // Convert minutes to milliseconds
+
+    res.send(`Connected to ${ssid} for ${duration} minutes`);
+  } catch (error) {
+    console.error("Error connecting to Wi-Fi", error);
+    res.status(500).send("Failed to connect to Wi-Fi");
+  }
+});
+
+// Start the server
+const PORT = 3001;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
 });

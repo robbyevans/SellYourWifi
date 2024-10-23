@@ -11,9 +11,10 @@ const App: React.FC = () => {
   const [password, setPassword] = useState<string>("");
   const [duration, setDuration] = useState<number>(5);
   const [status, setStatus] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState<boolean>(false); // State to toggle password visibility
 
   const handleConnect = async () => {
-    const wifiData: WifiOptions = { ssid, password, duration }; // Use the interface here
+    const wifiData: WifiOptions = { ssid, password, duration };
     try {
       setStatus("Connecting...");
       const response = await fetch("http://localhost:3001/connect", {
@@ -53,12 +54,30 @@ const App: React.FC = () => {
       <div>
         <label>
           Password:
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Enter Wi-Fi Password"
-          />
+          <div style={{ position: "relative" }}>
+            <input
+              type={showPassword ? "text" : "password"} // Toggle between text and password
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Enter Wi-Fi Password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((prev) => !prev)} // Toggle showPassword state
+              style={{
+                position: "absolute",
+                right: "10px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                border: "none",
+                background: "none",
+                cursor: "pointer",
+              }}
+            >
+              {showPassword ? "👁️" : "👁️‍🗨️"}{" "}
+              {/* Change the icon based on state */}
+            </button>
+          </div>
         </label>
       </div>
       <div>
@@ -68,6 +87,7 @@ const App: React.FC = () => {
             value={duration}
             onChange={(e) => setDuration(Number(e.target.value))}
           >
+            <option value={0.5}>30 seconds</option>
             <option value={5}>5 minutes</option>
             <option value={10}>10 minutes</option>
             <option value={30}>30 minutes</option>
