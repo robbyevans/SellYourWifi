@@ -1,9 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 interface WifiOptions {
   ssid: string;
   password: string;
-  duration: number;
+  duration: number; // Duration in minutes
 }
 
 const App: React.FC = () => {
@@ -12,6 +12,8 @@ const App: React.FC = () => {
   const [duration, setDuration] = useState<number>(5);
   const [status, setStatus] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState<boolean>(false); // State to toggle password visibility
+  const [countdown, setCountdown] = useState<number | null>(null); // Countdown state
+  const [intervalId, setIntervalId] = useState<NodeJS.Timeout | null>(null); // State to hold the interval ID
 
   const handleConnect = async () => {
     const wifiData: WifiOptions = { ssid, password, duration };
@@ -28,6 +30,7 @@ const App: React.FC = () => {
       if (response.ok) {
         const result = await response.text();
         setStatus(result);
+        startCountdown(duration * 60); // Start countdown in seconds
       } else {
         setStatus("Failed to connect");
       }
@@ -36,6 +39,46 @@ const App: React.FC = () => {
       console.error(error);
     }
   };
+
+  const startCountdown = (totalSeconds: number) => {
+    setCountdown(totalSeconds);
+    const interval = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev === 1) {
+          clearInterval(interval);
+          disconnectWifi(); // Disconnect when countdown reaches zero
+          return null; // Stop countdown
+        }
+        return prev ? prev - 1 : null;
+      });
+    }, 1000);
+    setIntervalId(interval); // Store interval ID to clean up later
+  };
+
+  const disconnectWifi = async () => {
+    try {
+      const response = await fetch("http://localhost:3001/disconnect", {
+        method: "POST",
+      });
+      if (response.ok) {
+        setStatus("Disconnected from Wi-Fi");
+      } else {
+        setStatus("Failed to disconnect");
+      }
+    } catch (error) {
+      setStatus("Error: Unable to disconnect");
+      console.error(error);
+    }
+  };
+
+  // Cleanup interval on component unmount
+  useEffect(() => {
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId); // Clear interval if component unmounts
+      }
+    };
+  }, [intervalId]);
 
   return (
     <div className="App">
@@ -97,6 +140,11 @@ const App: React.FC = () => {
       <div>
         <button onClick={handleConnect}>Connect to Wi-Fi</button>
       </div>
+      {countdown !== null && (
+        <div>
+          <p>Countdown: {countdown} seconds</p>
+        </div>
+      )}
       <div>
         <p>Status: {status}</p>
       </div>
