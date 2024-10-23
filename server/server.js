@@ -1,7 +1,7 @@
-const express = require("express");
-const cors = require("cors");
-const wifi = require("node-wifi"); // Ensure node-wifi is installed
-const { exec } = require("child_process");
+import express from "express";
+import cors from "cors";
+import wifi from "node-wifi";
+import { exec } from "child_process";
 
 const app = express();
 app.use(cors());
@@ -12,8 +12,10 @@ wifi.init({
   iface: null, // Use null to allow all available interfaces
 });
 
-// Store the active interface
+// Store the active interface and timers
 let activeIface = null;
+let disconnectTimeout = null;
+let remainingTime = null;
 
 app.post("/connect", async (req, res) => {
   const { ssid, password, duration } = req.body;
@@ -34,17 +36,9 @@ app.post("/connect", async (req, res) => {
       console.log(`Using interface: ${activeIface}`);
     }
 
-    // Set a timeout to disconnect after the given duration
-    const disconnectTimeout = setTimeout(async () => {
-      if (activeIface) {
-        try {
-          await disconnectFromWifi(activeIface); // Use the dynamic interface
-          console.log(`Disconnected from ${ssid} after ${duration} minutes`);
-        } catch (disconnectError) {
-          console.error("Error during custom disconnect:", disconnectError);
-        }
-      }
-    }, duration * 60000); // Convert minutes to milliseconds
+    // Set initial remaining time and start the disconnect countdown
+    remainingTime = duration * 60000; // Convert minutes to milliseconds
+    startDisconnectCountdown(remainingTime, ssid);
 
     res.send(`Connected to ${ssid} for ${duration} minutes`);
   } catch (error) {
@@ -52,6 +46,31 @@ app.post("/connect", async (req, res) => {
     res.status(500).send("Failed to connect to Wi-Fi");
   }
 });
+
+// Function to start the disconnect countdown
+const startDisconnectCountdown = (time, ssid) => {
+  if (disconnectTimeout) {
+    clearTimeout(disconnectTimeout); // Clear any existing timer
+  }
+
+  disconnectTimeout = setTimeout(async () => {
+    if (activeIface) {
+      try {
+        await disconnectFromWifi(activeIface); // Use the dynamic interface
+        console.log(`Disconnected from ${ssid} after time expired`);
+      } catch (disconnectError) {
+        console.error("Error during custom disconnect:", disconnectError);
+      }
+    }
+  }, time);
+
+  // Notify user when 10% of time remains
+  const notifyTime = time * 0.1; // 10% of the total time
+  setTimeout(() => {
+    console.log(`Notification: 10% of time remaining for ${ssid}`);
+    // Here, you could integrate a notification to the front-end or log it
+  }, time - notifyTime);
+};
 
 // Custom disconnect function
 const disconnectFromWifi = (iface) => {
@@ -72,6 +91,8 @@ app.post("/disconnect", async (req, res) => {
     if (activeIface) {
       await disconnectFromWifi(activeIface); // Use the dynamic interface
       activeIface = null; // Reset active interface after disconnecting
+      clearTimeout(disconnectTimeout); // Clear timeout on manual disconnection
+      disconnectTimeout = null;
       console.log("Disconnected from Wi-Fi");
       res.send("Disconnected from Wi-Fi");
     } else {

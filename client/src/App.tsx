@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from "react";
+import ToastMessage from "./ToastMessage";
+import { IoEyeOffSharp, IoEyeOutline } from "react-icons/io5";
+import "./_app.scss";
 
 interface WifiOptions {
   ssid: string;
   password: string;
-  duration: number; // Duration in minutes
+  duration: number;
 }
 
 const App: React.FC = () => {
@@ -11,9 +14,10 @@ const App: React.FC = () => {
   const [password, setPassword] = useState<string>("");
   const [duration, setDuration] = useState<number>(5);
   const [status, setStatus] = useState<string | null>(null);
-  const [showPassword, setShowPassword] = useState<boolean>(false); // State to toggle password visibility
-  const [countdown, setCountdown] = useState<number | null>(null); // Countdown state
-  const [intervalId, setIntervalId] = useState<NodeJS.Timeout | null>(null); // State to hold the interval ID
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [intervalId, setIntervalId] = useState<NodeJS.Timeout | null>(null);
+  const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [showToast, setShowToast] = useState<boolean>(false);
 
   const handleConnect = async () => {
     const wifiData: WifiOptions = { ssid, password, duration };
@@ -29,10 +33,10 @@ const App: React.FC = () => {
 
       if (response.ok) {
         const result = await response.text();
-        setStatus(result);
+        setStatus("Success: " + result);
         startCountdown(duration * 60); // Start countdown in seconds
       } else {
-        setStatus("Failed to connect");
+        setStatus("Error: Failed to connect");
       }
     } catch (error) {
       setStatus("Error: Unable to connect");
@@ -42,17 +46,26 @@ const App: React.FC = () => {
 
   const startCountdown = (totalSeconds: number) => {
     setCountdown(totalSeconds);
+
     const interval = setInterval(() => {
       setCountdown((prev) => {
-        if (prev === 1) {
-          clearInterval(interval);
-          disconnectWifi(); // Disconnect when countdown reaches zero
-          return null; // Stop countdown
+        if (prev === null) return null;
+
+        const remainingTime = prev - 1;
+        if (remainingTime <= totalSeconds * 0.1 && !showToast) {
+          setShowToast(true); // Show the Toast when 10% of time is left
         }
-        return prev ? prev - 1 : null;
+
+        if (remainingTime <= 0) {
+          clearInterval(interval);
+          disconnectWifi();
+          setShowToast(false); // Reset Toast state
+          return null;
+        }
+        return remainingTime;
       });
     }, 1000);
-    setIntervalId(interval); // Store interval ID to clean up later
+    setIntervalId(interval);
   };
 
   const disconnectWifi = async () => {
@@ -63,7 +76,7 @@ const App: React.FC = () => {
       if (response.ok) {
         setStatus("Disconnected from Wi-Fi");
       } else {
-        setStatus("Failed to disconnect");
+        setStatus("Error: Failed to disconnect");
       }
     } catch (error) {
       setStatus("Error: Unable to disconnect");
@@ -71,83 +84,80 @@ const App: React.FC = () => {
     }
   };
 
-  // Cleanup interval on component unmount
   useEffect(() => {
     return () => {
       if (intervalId) {
-        clearInterval(intervalId); // Clear interval if component unmounts
+        clearInterval(intervalId);
       }
     };
   }, [intervalId]);
 
+  const getStatusClass = () => {
+    if (!status) return "";
+    if (status.startsWith("Error")) return "error";
+    if (status.startsWith("Success")) return "success";
+    return "";
+  };
+
   return (
     <div className="App">
       <h1>Wi-Fi Connection Manager</h1>
-      <div>
-        <label>
-          Wi-Fi SSID:
+      <div className="form-group">
+        <label>Wi-Fi SSID:</label>
+        <input
+          type="text"
+          value={ssid}
+          onChange={(e) => setSsid(e.target.value)}
+          placeholder="Enter Wi-Fi SSID"
+        />
+      </div>
+      <div className="form-group">
+        <label className="password">Password:</label>
+        <div className="password-container">
           <input
-            type="text"
-            value={ssid}
-            onChange={(e) => setSsid(e.target.value)}
-            placeholder="Enter Wi-Fi SSID"
+            type={showPassword ? "text" : "password"}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Enter Wi-Fi Password"
           />
-        </label>
-      </div>
-      <div>
-        <label>
-          Password:
-          <div style={{ position: "relative" }}>
-            <input
-              type={showPassword ? "text" : "password"} // Toggle between text and password
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter Wi-Fi Password"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword((prev) => !prev)} // Toggle showPassword state
-              style={{
-                position: "absolute",
-                right: "10px",
-                top: "50%",
-                transform: "translateY(-50%)",
-                border: "none",
-                background: "none",
-                cursor: "pointer",
-              }}
-            >
-              {showPassword ? "👁️" : "👁️‍🗨️"}{" "}
-              {/* Change the icon based on state */}
-            </button>
-          </div>
-        </label>
-      </div>
-      <div>
-        <label>
-          Connect for:
-          <select
-            value={duration}
-            onChange={(e) => setDuration(Number(e.target.value))}
+          <button
+            type="button"
+            className="show-password"
+            onClick={() => setShowPassword(!showPassword)}
           >
-            <option value={0.5}>30 seconds</option>
-            <option value={5}>5 minutes</option>
-            <option value={10}>10 minutes</option>
-            <option value={30}>30 minutes</option>
-          </select>
-        </label>
+            {showPassword ? <IoEyeOffSharp /> : <IoEyeOutline />}
+          </button>
+        </div>
       </div>
-      <div>
-        <button onClick={handleConnect}>Connect to Wi-Fi</button>
+      <div className="form-group">
+        <label className="duration">Connect for:</label>
+        <select
+          value={duration}
+          onChange={(e) => setDuration(Number(e.target.value))}
+        >
+          <option value={0.5}>30 seconds</option>
+          <option value={5}>5 minutes</option>
+          <option value={10}>10 minutes</option>
+          <option value={30}>30 minutes</option>
+        </select>
+      </div>
+      <div className="form-group">
+        <button className="connect-btn" onClick={handleConnect}>
+          Connect to Wi-Fi
+        </button>
       </div>
       {countdown !== null && (
-        <div>
-          <p>Countdown: {countdown} seconds</p>
-        </div>
+        <p className="countdown">Countdown: {countdown} seconds</p>
       )}
-      <div>
-        <p>Status: {status}</p>
-      </div>
+      <p className={`info ${getStatusClass()}`}>Status: {status}</p>
+
+      {showToast && (
+        <ToastMessage
+          onClose={() => setShowToast(false)}
+          onRecharge={() => alert("Recharge option clicked!")}
+          duration={5000} // Auto-close after 3 seconds
+        />
+      )}
     </div>
   );
 };
